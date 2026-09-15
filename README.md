@@ -59,6 +59,51 @@
 
 ---
 
+## 🖼️ Примеры результатов
+
+### ✅ NORMAL — нормальная бутылка (score 0.28)
+
+<img src="docs/screenshots/norm_result.png" alt="NORMAL result" width="100%">
+
+*Слева — исходник, в центре — карта аномалий (слабое кольцо по краю), справа — overlay. Модель верно определила норму.*
+
+---
+
+### ❌ DEFECT (small) — малый скол (score 0.60)
+
+<img src="docs/screenshots/defect_small_result.png" alt="Small defect" width="100%">
+
+*Небольшой скол на боку бутылки. Модель локализовала дефект — красное пятно в нужном месте.*
+
+---
+
+### ❌ DEFECT (contamination) — загрязнение (score 0.71)
+
+<img src="docs/screenshots/contamination_result.png" alt="Contamination defect" width="100%">
+
+*Загрязнение в центре. Модель точно указала область — heatmap сконцентрирован на дефекте.*
+
+---
+
+### ❌ DEFECT (large) — большой скол (score 0.83)
+
+<img src="docs/screenshots/defect_large_result.png" alt="Large defect" width="100%">
+
+*Крупный скол на всю высоту. Модель уверенно классифицировала как DEFECT с высоким score.*
+
+---
+
+**Логика score:** чем серьёзнее дефект — тем выше `anomaly_score`:
+
+| Категория | Score |
+|:---------:|:-----:|
+| ✅ NORMAL | 0.28 |
+| ❌ DEFECT (small) | 0.60 |
+| ❌ DEFECT (contamination) | 0.71 |
+| ❌ DEFECT (large) | 0.83 |
+
+---
+
 ## 🏗️ Архитектура
 
 ### High-Level обзор
@@ -336,7 +381,12 @@ defect-detection/
 │
 ├── 📊 docs/
 │   ├── eda_summary.csv          # Статистика по дефектам
-│   └── eda_counts.csv           # Количество изображений
+│   ├── eda_counts.csv           # Количество изображений
+│   └── screenshots/             # Визуализации результатов
+│       ├── norm_result.png
+│       ├── defect_large_result.png
+│       ├── defect_small_result.png
+│       └── contamination_result.png
 │
 ├── 📁 data/                     # ← в .gitignore
 │   └── MVTecAD/bottle/
@@ -500,23 +550,6 @@ file: <binary image>
 | `box` | array\|null | Bounding box `[x1, y1, x2, y2]` |
 | `box_score` | float\|null | Уверенность рамки |
 | `overlay_base64` | string | PNG с overlay (base64) |
-
----
-
-## 🖼️ Примеры результатов
-
-<div align="center">
-
-| Категория | Score | Heatmap | Описание |
-|:---------:|:-----:|:-------:|----------|
-| ✅ **NORMAL** | 0.28 | Слабое кольцо по краю | Нормальная бутылка |
-| ❌ **DEFECT** (small) | 0.60 | Маленькое пятно | Малый скол |
-| ❌ **DEFECT** (contamination) | 0.71 | Пятно в центре | Загрязнение |
-| ❌ **DEFECT** (large) | 0.83 | Большое пятно | Большой скол |
-
-**Логика score:** чем серьёзнее дефект — тем выше `anomaly_score`.
-
-</div>
 
 ---
 
