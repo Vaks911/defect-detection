@@ -625,6 +625,131 @@ file: <binary image>
 
 ---
 
+## 🛠️ Challenges & Solutions
+
+В процессе разработки мы столкнулись с рядом проблем, которые пришлось решать. Ниже — самые значимые.
+
+### 🔴 Проблема 1: Конфликт версий в Anomalib
+
+**Симптом:** `ImportError: cannot import name '_ActionSubCommands' from 'jsonargparse._actions'`
+
+**Причина:** Anomalib 1.1.0 (2024 год) требует старую версию `jsonargparse` (< 4.32). pip при установке поставил свежую (4.52+), где внутренний класс переименован.
+
+**Решение:**
+```bash
+pip install "jsonargparse==4.28.0"
+```
+
+**Что было дальше:** аналогичные конфликты с `rich` (15.0 ломал прогресс-бары) и `matplotlib` (3.10 удалил `tostring_rgb`). Все версии зафиксированы в `requirements.txt`.
+
+---
+
+### 🔴 Проблема 2: Скачивание MVTec AD
+
+**Симптом 1:** `HTTPError: HTTP Error 404` — стандартный downloader Anomalib больше не работает, ссылка на сервер MVTec устарела.
+
+**Симптом 2:** `RuntimeError: CAS Client Error` — новая CDN Hugging Face (Xet) выдаёт ошибку при загрузке.
+
+**Симптом 3:** оригинальный датасет `Voxel51/mvtec-ad` весит ~5 ГБ (все 15 категорий), а нужна только `bottle`.
+
+**Решение:** нашли альтернативный репозиторий на Hugging Face — [`visualanom/mirage_mvtec_visa`](https://huggingface.co/datasets/visualanom/mirage_mvtec_visa), где:
+- Категории разбиты **отдельно** — можно скачать только `bottle` (~50 МБ вместо 5 ГБ).
+- Структура совместима с Anomalib (после перемещения в `data/MVTecAD/bottle/`).
+- Датасет — MIRAGE-версия MVTec AD, обогащённая синтетическими аномалиями.
+
+**Команда:**
+```bash
+hf download --repo-type dataset --include "mvtec/bottle/**" --local-dir ./data/MVTecAD visualanom/mirage_mvtec_visa
+```
+
+---
+
+### 🔴 Проблема 3: Отсутствующие зависимости Anomalib
+
+**Симптом:** последовательные `ModuleNotFoundError` — `lightning`, `imgaug`, `kornia`, `open_clip`.
+
+**Причина:** Anomalib 1.1.0 не указывает часть зависимостей как обязательные, ожидая ручной установки через `anomalib install` (который тянет ~500 МБ мусора).
+
+**Решение:** установили только необходимый минимум вручную:
+```bash
+pip install "lightning>=2.0,<2.6" imgaug kornia open_clip_torch
+```
+
+---
+
+### 🔴 Проблема 4: Конфликт NumPy 2.x
+
+**Симптом:** `AttributeError: np.sctypes was removed in the NumPy 2.0 release`
+
+**Причина:** `imgaug` (для аугментации) использует удалённый в NumPy 2.0 атрибут `np.sctypes`. При этом свежий `opencv-python 5.x` требует **именно** NumPy 2.x.
+
+**Решение:** откатили оба пакета до совместимых версий:
+```bash
+pip install "numpy<2" "opencv-python<4.11"
+```
+
+Обе версии работают и с NumPy 1.x, и с 2.x.
+
+---
+
+### 🔴 Проблема 5: Права на символические ссылки в Windows
+
+**Симптом:** `OSError: [WinError 1314] Клиент не обладает требуемыми правами` при попытке Anomalib создать папку `latest` как symlink на `v0`.
+
+**Причина:** в Windows обычный пользователь не может создавать симлинки — нужен Developer Mode или права администратора.
+
+**Решение:**
+1. Включили **Developer Mode** (Настройки → Система → Для разработчиков).
+2. Перезагрузили ПК.
+3. Anomalib создал `results/Patchcore/MVTec/bottle/latest → v3` без ошибок.
+
+---
+
+### 🔴 Проблема 6: PyTorch 2.6 и `weights_only`
+
+**Симптом:** `_pickle.UnpicklingError: Weights only load failed` при загрузке `.ckpt`.
+
+**Причина:** в PyTorch 2.6 изменился дефолт `torch.load(weights_only=True)`. Anomalib сохранил в чекпоинт не только тензоры, но и объекты `torchvision.transforms.v2.Compose`, `Resize` и другие.
+
+**Решение:** добавили патч-обёртку в скрипт инференса:
+```python
+_original_load = torch.load
+def _patched_load(*args, **kwargs):
+    kwargs.setdefault("weights_only", False)
+    return _original_load(*args, **kwargs)
+torch.load = _patched_load
+```
+
+Безопасно, потому что мы загружаем **свой собственный** чекпоинт.
+
+---
+
+### 🔴 Проблема 7: Несовпадение API Anomalib 1.1.0
+
+**Симптом:** `AttributeError: 'dict' object has no attribute 'pred_score'`
+
+**Причина:** разные минорные версии Anomalib возвращают разные структуры из `engine.predict()`. В 1.1.0 это **словарь** с ключами `pred_scores`, `pred_labels`, `anomaly_maps` (во множественном числе).
+
+**Решение:** узнали точные ключи через отладочный вывод и использовали их:
+```python
+score = float(pred["pred_scores"].item())
+label = int(pred["pred_labels"].item())
+anomaly_map = pred["anomaly_maps"].squeeze().cpu().numpy()
+```
+
+---
+
+### ✅ Что это дало
+
+В итоге мы научились:
+- **Читать traceback** — искать конкретную строку, где упало.
+- **Фиксировать версии** — `requirements.txt` защищает от будущих конфликтов.
+- **Искать альтернативы** — когда стандартный путь не работает, искать обходной.
+- **Работать с Windows-спецификой** — символические ссылки, права доступа.
+- **Документировать проблемы** — чтобы команда не наступала на те же грабли.
+
+---
+
 ## 📝 Лицензия
 
 MIT License — свободно используйте, модифицируйте и распространяйте.
