@@ -1,0 +1,6 @@
+split,count
+train/good,209
+test/good,20
+test/broken_large,20
+test/broken_small,22
+test/contamination,21

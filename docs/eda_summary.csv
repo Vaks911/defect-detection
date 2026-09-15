@@ -1,0 +1,4 @@
+defect,count,mean,min,max
+broken_large,20,0.117,0.0409,0.2742
+broken_small,22,0.0307,0.0088,0.0806
+contamination,21,0.0849,0.0058,0.1653
